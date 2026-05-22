@@ -1,6 +1,8 @@
-# JHora Extraction Pipeline
+# JHora AI MCP
 
 Automated pipeline to extract Vedic astrology chart data from JHora software and expose it as structured JSON, a REST API, and an MCP server for LLM tool use.
+
+![Demo](demo.gif)
 
 ```
 Birth details / JHD file
