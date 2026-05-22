@@ -2,6 +2,9 @@
 
 Automated pipeline to extract Vedic astrology chart data from JHora software and expose it as structured JSON, a REST API, and an MCP server for LLM tool use.
 
+> **Want a full Vedic astrology app in the browser — no install, no signup, no data leaving your device?**
+> Check out **[Hora Prakash](https://github.com/PriyankGahtori/hora-prakash)** — free, open-source Jyotish software with birth charts, divisional charts D1–D60, Vimshottari Dasha, transits, Shadbala, and more. Runs entirely in your browser via WebAssembly. **[→ Open Live App](https://priyankgahtori.github.io/hora-prakash/)**
+
 ![Demo](demo.gif)
 
 ```
