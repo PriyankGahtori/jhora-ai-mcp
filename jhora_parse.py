@@ -14,7 +14,7 @@ Output: jhora_data/<name>/<timestamp>/
 import re, json, os, sys
 from datetime import datetime
 
-WINE_TEMP = os.path.expanduser("~/.wine/drive_c/windows/temp")
+WINE_TEMP = os.path.expanduser("~/Library/Application Support/CrossOver/Bottles/Jagannatha Hora Vedic Astrology Software/drive_c/windows/temp")
 _script_dir = os.path.dirname(os.path.abspath(__file__))
 OUT_BASE     = sys.argv[1] if len(sys.argv) > 1 else os.path.join(_script_dir, 'jhora_data')
 NAME_OVERRIDE = sys.argv[2] if len(sys.argv) > 2 else None

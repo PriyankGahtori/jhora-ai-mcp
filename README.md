@@ -25,6 +25,9 @@ scripts/jhora_data/<name>/<timestamp>/
   │  server.py      │     │  mcp_server.py        │
   │  REST API :8080 │     │  stdio MCP (7 tools)  │
   └─────────────────┘     └──────────────────────┘
+                                    ↑
+                          jhora_panchanga.sh  ← daily panchanga extractor
+                          interview_slots.py  ← classical Vedic slot scorer
 ```
 
 ---
@@ -33,7 +36,7 @@ scripts/jhora_data/<name>/<timestamp>/
 
 | Software | Version | Purpose |
 |----------|---------|---------|
-| Wine | any (tested on 11.0) | Run Windows apps on macOS/Linux |
+| CrossOver (macOS) or Wine (Linux) | CrossOver 24+ / Wine 11+ | Run Windows apps on macOS/Linux — CrossOver users: see macOS installation path below |
 | Jagannatha Hora (JHora) | 8.0+ | Vedic astrology engine |
 | AutoHotkey | **v1.x only** (not v2) | GUI automation inside Wine |
 | Python | 3.8+ | Parser + servers (stdlib only, no pip) |
@@ -98,6 +101,44 @@ python3 --version      # verify ≥ 3.8
 ```
 
 No pip installs needed — entire pipeline uses stdlib only.
+
+### macOS with CrossOver
+
+If you use CrossOver instead of plain Wine, follow these steps after installing JHora and AutoHotkey into a CrossOver bottle:
+
+**1. Find your bottle path:**
+```bash
+ls ~/Library/Application\ Support/CrossOver/Bottles/
+```
+
+**2. Install AutoHotkey v1.x into the JHora bottle** via CrossOver's *Install Windows Software* dialog. Search for "AutoHotkey" and select v1.x.
+
+**3. Set `WINE_PREFIX` in `jhora_extract.sh`:**
+```bash
+WINE_PREFIX="$HOME/Library/Application Support/CrossOver/Bottles/<BottleName>"
+```
+
+**4. Set `AHK_EXE` in `jhora_extract.sh`:**
+```bash
+AHK_EXE="$WINE_PREFIX/drive_c/Program Files/AutoHotkey/AutoHotkey.exe"
+```
+
+**5. Change the `wine` call in `jhora_extract.sh` to the CrossOver binary:**
+```bash
+"/Applications/CrossOver.app/Contents/SharedSupport/CrossOver/CrossOver-Hosted Application/wine"
+```
+
+**6. Update `WINE_TEMP` in `jhora_parse.py`** to point to the CrossOver bottle temp directory:
+```python
+WINE_TEMP = os.path.expanduser(
+    "~/Library/Application Support/CrossOver/Bottles/<BottleName>/drive_c/windows/temp"
+)
+```
+
+**7. Set `CX_BOTTLE` when running:**
+```bash
+CX_BOTTLE=<BottleName> ./scripts/jhora_extract.sh --jhd "..."
+```
 
 ---
 
@@ -414,6 +455,7 @@ Restart Claude Desktop. A hammer icon appears in chat — confirms server connec
 | `get_dasha` | Vimshottari dasha tree (3 levels) |
 | `summarize_chart` | **Plain-text LLM-friendly summary** — no JSON parsing needed |
 | `extract_chart` | Run JHora extraction (~30s), return new chart |
+| `get_best_slots` | Score interview/meeting slots using classical Vedic astrology. Returns top 3 slots with full factor breakdown and 7th house interviewer analysis. |
 
 ### `summarize_chart` — LLM-friendly output
 
@@ -475,6 +517,49 @@ Pass `include_divisionals: false` to skip D1/D9/D10 sections (shorter context).
 
 Takes ~30s. Requires Wine + JHora installed. Returns core format on success.
 
+### `get_best_slots` — Interview slot scorer
+
+Scores every 45-minute slot (9:00 AM–6:45 PM) across a date range using classical Vedic principles read live from JHora panchanga extractions. Returns ranked slots with a full factor breakdown.
+
+#### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `natal` | string | yes | Extracted chart name for natal nakshatra lookup |
+| `start` | string (YYYY-MM-DD) | yes | First date of the range |
+| `end` | string (YYYY-MM-DD) | yes | Last date of the range |
+| `lat` | number | yes | Latitude of interview location |
+| `lon` | number | yes | Longitude of interview location |
+| `tz` | number | yes | Timezone offset in decimal hours (e.g. 5.5 for IST) |
+| `place` | string | yes | Place name label |
+| `mode` | string | no | `virtual` (default) or `onsite` — affects 7th house weighting |
+| `extract` | boolean | no | Force fresh JHora extraction (default `false`) |
+
+#### Scoring factors
+
+| Factor | Classical source |
+|--------|-----------------|
+| Tara Bala from Janma Nakshatra | BPHS 48.207–209; Muhurta Chintamani |
+| Vara (weekday lord) | Classical Muhurta |
+| Tithi class (Nanda / Bhadra / Jaya / Rikta / Poorna) | Prashna Marga |
+| Yoga | Prashna Marga; Classical Muhurta |
+| Karana (Vishti = inauspicious) | Classical Panchanga |
+| Moon from natal Moon (Kendra = auspicious, 8th = inauspicious) | Prashna Marga |
+| Mercury retrograde penalty | Classical Muhurta |
+| Dasha lord transit trigger (own sign / exaltation / natal lagna) | Prashna Marga 14.86–88 |
+| SAV bindus in transit Moon sign | BPHS Ch.32 |
+| Rising lagna type (Shirshodaya / Prishtodaya) | Iranganti Rangacharya; Prashna Marga |
+
+#### 7th house analysis
+
+For each slot the scorer identifies planets placed in and aspecting the natal 7th house, including special aspects of Mars (4th/8th), Saturn (3rd/10th), and Jupiter (5th/9th) per BPHS. From each planet's natural karakatva it derives the interviewer's likely disposition and question focus — e.g. Saturn in the 7th suggests a structured, evaluative interviewer; Jupiter aspects suggest philosophical or mentorship-oriented questions. The `mode` parameter weights the 7th house differently for virtual (communication planets favored) vs. onsite (physical presence, travel lord) contexts.
+
+#### Example Claude Desktop prompts
+
+> "Find the best interview slots between July 1 and July 15 2026 for New Delhi (lat 28.6139, lon 77.2090, tz 5.5), virtual interview, use my chart Supriya_rect_917"
+
+> "Evaluate this fixed slot: July 3 2026 at 2:00 PM IST, New Delhi, virtual, natal chart Supriya_rect_917"
+
 ### Example LLM prompts
 
 > "List my extracted charts"
@@ -528,6 +613,15 @@ brew install wine
 AHK_EXE="/custom/path/AutoHotkey.exe" ./scripts/jhora_extract.sh --jhd "..."
 ```
 
+### AutoHotkey v2 installed — must use v1.x
+AutoHotkey v2 uses different syntax and will not work. Download v1.1.x specifically from https://www.autohotkey.com/download/1.1/
+
+### CrossOver bottle not found
+Set `WINE_PREFIX` explicitly to the full path of your CrossOver bottle and set `CX_BOTTLE` to the bottle name.
+
+### `get_best_slots` times out in Claude Desktop
+The tool runs JHora once per day in the date range. Pre-extract the panchanga charts manually using `jhora_panchanga.sh` for each date, then call `get_best_slots` with `extract=false`.
+
 ---
 
 ## Files
@@ -541,3 +635,18 @@ AHK_EXE="/custom/path/AutoHotkey.exe" ./scripts/jhora_extract.sh --jhd "..."
 | `mcp_server.py` | MCP stdio server for LLM tool use |
 | `jhora_compare.mjs` | Compare parsed.json vs SwissEph calculations (optional) |
 | `jhora_data/` | Output directory (gitignored, `.gitkeep` preserves dir) |
+| `jhora_panchanga.sh` | Extract panchanga for a specific date and location (used by interview slot scorer) |
+| `interview_slots.py` | Vedic astrology interview slot scorer — classical panchanga + natal chart analysis |
+| `slot_scores.json` | Output of last get_best_slots run (gitignored) |
+
+---
+
+## Classical sources
+
+| Text | Notes |
+|------|-------|
+| **BPHS** (Brihat Parashara Hora Shastra) | Tara Bala (Ch.48), Ashtakavarga (Ch.32), special planetary aspects |
+| **Prashna Marga** — Narayanan Nambutiri, 1649 CE | Panchanga assessment, Moon from natal Moon, transit triggers (14.86–88) |
+| **Muhurta Chintamani** | Tara Bala for Muhurta selection |
+| **Iranganti Rangacharya** | Lagna rising type classification (Shirshodaya / Prishtodaya / Ubhayodaya) |
+| **B.V. Raman, Varshaphala** | Tajika deeptamsha orbs |

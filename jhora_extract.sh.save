@@ -1,23 +1,47 @@
 #!/usr/bin/env bash
+# jhora_extract.sh — Extract + parse JHora data from JHD file or birth details
+#
+# MODE 1 — existing JHD file:
+#   ./scripts/jhora_extract.sh --jhd "/path/to/Chart.jhd"
+#
+# MODE 2 — birth details (creates JHD):
+#   ./scripts/jhora_extract.sh \
+#     --name "Test Chart" \
+#     --date 1990-01-15 \
+#     --time 10:30 \
+#     --lat 28.6667 \
+#     --lon 77.3611 \
+#     --tz 5.5 \
+#     [--place "New Delhi"]
+#
+# TZ: decimal hours, positive = east (IST = 5.5)
+# LAT/LON: decimal degrees, positive = north/east
+
 set -euo pipefail
 
 SCRIPTS_DIR="$(cd "$(dirname "$0")" && pwd)"
 
+# ── Configuration (override via env vars) ────────────────────────────────────
+# Where extracted data is saved
 OUT_DIR="${JHORA_OUT_DIR:-$SCRIPTS_DIR/jhora_data}"
 
+# Wine paths — change if Wine prefix is not ~/.wine
 WINE_PREFIX="${WINE_PREFIX:-$HOME/Library/Application Support/CrossOver/Bottles/Jagannatha Hora Vedic Astrology Software}"
 WINE_TEMP="${WINE_PREFIX}/drive_c/windows/temp"
 AHK_EXE="${AHK_EXE:-${WINE_PREFIX}/drive_c/Program Files/AutoHotkey/AutoHotkey.exe}"
-WINE_BIN="/Applications/CrossOver.app/Contents/SharedSupport/CrossOver/CrossOver-Hosted Application/wine"
 
+# Windows-side path to AHK script (must match where we copy it)
 AHK_SCRIPT="C:\\windows\\temp\\extract_param.ahk"
+
 PARSER="$SCRIPTS_DIR/jhora_parse.py"
 
+# Copy AHK script to wine temp if missing or outdated
 if [[ ! -f "$WINE_TEMP/extract_param.ahk" ]] || \
    ! cmp -s "$SCRIPTS_DIR/extract_param.ahk" "$WINE_TEMP/extract_param.ahk"; then
   cp "$SCRIPTS_DIR/extract_param.ahk" "$WINE_TEMP/extract_param.ahk"
 fi
 
+# ── Argument parsing ──────────────────────────────────────────────────────────
 MODE=""
 JHD_PATH=""
 NAME="" DATE="" TIME="" LAT="" LON="" TZ="" PLACE="Unknown"
@@ -43,25 +67,30 @@ if [[ -z "$MODE" ]]; then
   exit 1
 fi
 
+# ── Mode 1: use provided JHD ──────────────────────────────────────────────────
 if [[ "$MODE" == "jhd" ]]; then
   if [[ ! -f "$JHD_PATH" ]]; then
     echo "ERROR: JHD not found: $JHD_PATH"
     exit 1
   fi
   NAME=$(basename "$JHD_PATH" .jhd)
+  # Copy to wine temp preserving original name so JHora writes correct chart name
   cp "$JHD_PATH" "$WINE_TEMP/${NAME}.jhd"
   WIN_JHD="C:\\windows\\temp\\${NAME}.jhd"
 
+# ── Mode 2: create JHD from birth details ────────────────────────────────────
 elif [[ "$MODE" == "birth" ]]; then
   if [[ -z "$NAME" || -z "$DATE" || -z "$TIME" || -z "$LAT" || -z "$LON" || -z "$TZ" ]]; then
     echo "ERROR: --name --date --time --lat --lon --tz all required"
     exit 1
   fi
 
+  # Parse date: YYYY-MM-DD
   YEAR=$(echo "$DATE" | cut -d- -f1)
   MONTH=$(echo "$DATE" | cut -d- -f2 | sed 's/^0//')
   DAY=$(echo "$DATE"   | cut -d- -f3 | sed 's/^0//')
 
+  # Parse time: HH:MM or HH:MM:SS → D.MMFF (H + MM/100)
   HOUR=$(echo "$TIME" | cut -d: -f1 | sed 's/^0//')
   MIN=$(echo  "$TIME" | cut -d: -f2 | sed 's/^0*//')
   SEC=$(echo  "$TIME" | cut -d: -f3 2>/dev/null | sed 's/^0*//' || echo 0)
@@ -69,15 +98,18 @@ elif [[ "$MODE" == "birth" ]]; then
   [[ -z "$SEC" ]] && SEC=0
   TIME_DMMFF=$(python3 -c "print(f'{int(\"$HOUR\") + int(\"$MIN\")/100 + int(\"$SEC\")/10000:.6f}')")
 
+  # TZ: decimal hours east → store as negative D.MMFF (east = negative in JHD)
   TZ_SIGN=$(python3 -c "v=float('$TZ'); print('-' if v>=0 else '')")
   TZ_ABS=$(python3 -c "v=abs(float('$TZ')); h=int(v); m=round((v-h)*60); print(f'{h}.{m:02d}0000')")
   TZ_VAL="${TZ_SIGN}${TZ_ABS}"
 
+  # LAT: decimal deg → D.MMFF (positive = north)
   LAT_DMMFF=$(python3 -c "
 v=abs(float('$LAT')); d=int(v); m=(v-d)*60; sign='' if float('$LAT')>=0 else '-'
 print(f'{sign}{d}.{int(m):02d}{round((m-int(m))*60):02d}00')
 ")
 
+  # LON: decimal deg → D.MMFF (negative = east in JHD)
   LON_DMMFF=$(python3 -c "
 v=abs(float('$LON')); d=int(v); m=(v-d)*60; sign='-' if float('$LON')>=0 else ''
 print(f'{sign}{d}.{int(m):02d}{round((m-int(m))*60):02d}00')
@@ -109,13 +141,13 @@ ${PLACE}
   echo ""
 fi
 
+# ── Run AHK extraction ────────────────────────────────────────────────────────
 echo "Launching JHora with: $WIN_JHD"
 echo "Extracting... (takes ~35s)"
-CX_BOTTLE="Jagannatha Hora Vedic Astrology Software" \
-WINEPREFIX="$WINE_PREFIX" \
-"$WINE_BIN" "$AHK_EXE" "$AHK_SCRIPT" "$WIN_JHD" 2>/dev/null
+wine "$AHK_EXE" "$AHK_SCRIPT" "$WIN_JHD" 2>/dev/null
 echo "Extraction complete."
 
+# ── Run Python parser ─────────────────────────────────────────────────────────
 echo "Parsing..."
 python3 "$PARSER" "$OUT_DIR"
 
