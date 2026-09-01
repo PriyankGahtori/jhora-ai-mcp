@@ -67,7 +67,49 @@ IfExist, C:\windows\temp\chart_data.txt
     FileDelete, C:\windows\temp\chart_data.txt
 FileAppend, %Clipboard%, C:\windows\temp\chart_data.txt
 
-; ── Step 3: Divisional chart data (context menu → a → context menu → Up → Enter) ──
+; ── Step 3: Shadbala component breakup ─────────────────────────────────────
+; Open Strengths -> Other strengths, then select Shadbala breakup.
+; These are Wine logical screen coordinates measured with Window Spy after
+; accounting for the Retina-scaled macOS screenshot.
+WinActivate, Jagannatha Hora
+WinMaximize, Jagannatha Hora
+Sleep, 1000
+Click, 185, 88
+Sleep, 6000
+Click, 560, 839
+Sleep, 2000
+Click, 1100, 165, Right
+Sleep, 500
+Send, b
+Sleep, 2500
+WinActivate, Jagannatha Hora
+Sleep, 500
+Clipboard :=
+; Reopen the table context menu. Up wraps to the final Copy to clipboard
+; item because the menu opens with the current breakup item focused.
+Click, 1100, 165, Right
+Sleep, 500
+Send, {Up}
+Sleep, 300
+Send, {Enter}
+ClipWait, 15
+clipOK := !ErrorLevel
+
+IfWinExist, Copied
+{
+    ControlClick, Button1, Copied
+    Sleep, 500
+}
+
+if (clipOK)
+{
+    IfExist, C:\windows\temp\shadbala_breakup.txt
+        FileDelete, C:\windows\temp\shadbala_breakup.txt
+    FileAppend, %Clipboard%, C:\windows\temp\shadbala_breakup.txt
+}
+Clipboard :=
+
+; ── Step 4: Divisional chart data (context menu → a → context menu → Up → Enter) ──
 WinActivate, Jagannatha Hora
 Sleep, 1000
 Send, +{F10}
