@@ -110,39 +110,13 @@ if (clipOK)
 Clipboard :=
 
 ; ── Step 3b: Kaala Bala per-sub breakup ───────────────────────────────────
-; From the strengths table: right-click → 'k' selects the "Kaala Bala"
-; breakup (Natonnata / Paksha / Tribhaga / Abda / Maasa / Vaara / Hora / …),
-; then re-open the menu and Up→Enter hits "Copy to clipboard".
-WinActivate, Jagannatha Hora
-Sleep, 1000
-Click, 1100, 165, Right
-Sleep, 500
-Send, k
-Sleep, 2500
-WinActivate, Jagannatha Hora
-Sleep, 500
-Clipboard :=
-Click, 1100, 165, Right
-Sleep, 500
-Send, {Up}
-Sleep, 300
-Send, {Enter}
-ClipWait, 15
-kClipOK := !ErrorLevel
+GrabBreakup("k", "C:\windows\temp\kaala_breakup.txt")
 
-IfWinExist, Copied
-{
-    ControlClick, Button1, Copied
-    Sleep, 500
-}
-
-if (kClipOK)
-{
-    IfExist, C:\windows\temp\kaala_breakup.txt
-        FileDelete, C:\windows\temp\kaala_breakup.txt
-    FileAppend, %Clipboard%, C:\windows\temp\kaala_breakup.txt
-}
-Clipboard :=
+; ── Step 3c: Sthana Bala per-sub breakup ─────────────────────────────────
+; right-click → 't' selects "Sthana Bala" breakup
+; (Uchcha / Saptavargaja / Oja Yugma / Kendra / Drekkana).
+; ('c'/'r' give only single-column Cheshta/Drig totals — no sub-breakup.)
+GrabBreakup("t", "C:\windows\temp\sthana_breakup.txt")
 
 ; ── Step 4: Divisional chart data (context menu → a → context menu → Up → Enter) ──
 WinActivate, Jagannatha Hora
@@ -178,3 +152,36 @@ IfWinExist, Jagannatha Hora
     WinClose, Jagannatha Hora
 
 ExitApp
+
+; ── Helper: select a Strengths-table breakup by accelerator letter and copy ──
+GrabBreakup(letter, outFile)
+{
+    WinActivate, Jagannatha Hora
+    Sleep, 1000
+    Click, 1100, 165, Right
+    Sleep, 500
+    Send, %letter%
+    Sleep, 2500
+    WinActivate, Jagannatha Hora
+    Sleep, 500
+    Clipboard :=
+    Click, 1100, 165, Right
+    Sleep, 500
+    Send, {Up}
+    Sleep, 300
+    Send, {Enter}
+    ClipWait, 15
+    ok := !ErrorLevel
+    IfWinExist, Copied
+    {
+        ControlClick, Button1, Copied
+        Sleep, 500
+    }
+    if (ok)
+    {
+        IfExist, %outFile%
+            FileDelete, %outFile%
+        FileAppend, %Clipboard%, %outFile%
+    }
+    Clipboard :=
+}
